@@ -6,7 +6,7 @@ local config = {}
 
 local DEFAULT_OPTS = {
   bin = "pair-gpt",
-  model = "text-davinci-003"
+  model = "gpt-3.5-turbo"
 }
 
 local function merge_options(conf)
@@ -46,9 +46,14 @@ local function pair_cmd(subcmd, lang, prompt)
   -- split by lines
   local lines = {}
   for s in output:gmatch("[^\r\n]+") do
-    table.insert(lines, s)
+    -- if the s has period at the end of the paragraph, then it's a new sentence
+    if s:match("%.$") then
+        table.insert(lines, s)
+        table.insert(lines, "")
+    else
+        table.insert(lines, s)
+    end
   end
-
   return lines
 end
 
@@ -69,11 +74,12 @@ local function get_visual_selection(buf)
   return table.concat(lines, '\\n')
 end
 
+
 local function write()
   local s_start = fn.getpos("'<")
   local s_end = fn.getpos("'>")
   local win = api.nvim_get_current_win()
-  local lang = o.syntax
+  local lang = vim.bo.filetype
   local buf = api.nvim_get_current_buf()
   local linenr = api.nvim_win_get_cursor(win)[1]
 
@@ -90,7 +96,7 @@ end
 local function refactor()
   local s_start = fn.getpos("'<")
   local s_end = fn.getpos("'>")
-  local lang = o.syntax
+  local lang = vim.bo.filetype
   local buf = api.nvim_get_current_buf()
 
   -- clean prompt. remove comment characters
@@ -105,23 +111,104 @@ local function refactor()
   api.nvim_buf_set_lines(buf, s_start[2] - 1, s_end[2], false, output)
 end
 
-local function explain()
-  local s_start = fn.getpos("'<")
-  -- local s_end = fn.getpos("'>")
-  local lang = o.syntax
+-- local function explain()
+--   local s_start = fn.getpos("'<")
+--   -- local s_end = fn.getpos("'>")
+--   local lang = vim.bo.filetype
+--   local buf = api.nvim_get_current_buf()
+--
+--   local input = clean_prompt(get_visual_selection(buf))
+--   local output = pair_cmd("explain", lang, input)
+--
+--   -- write output right above the prompt
+--   api.nvim_buf_set_lines(buf, s_start[2] - 1, s_start[2] - 1, false, output)
+--
+-- end
+
+-- local function explain()
+--   local lang = vim.bo.filetype
+--   local buf = api.nvim_get_current_buf()
+--   local input = clean_prompt(get_visual_selection(buf))
+--   local output = pair_cmd("explain", lang, input)
+--
+--   -- Open a new buffer for the output
+--   local output_buf = api.nvim_create_buf(false, true)
+--   api.nvim_buf_set_lines(output_buf, 0, -1, false, output)
+--
+--   -- Set the buffer options
+--   api.nvim_buf_set_option(output_buf, 'buftype', 'nofile')
+--   api.nvim_buf_set_option(output_buf, 'bufhidden', 'hide')
+--
+--   -- Open the buffer in a new horizontal split, taking 40% of the width
+--   local width = math.floor(api.nvim_get_option('columns') * 0.4)
+--   local win = api.nvim_open_win(output_buf, true, {
+--     relative = 'win',
+--     width = width,
+--     height = api.nvim_get_option('lines'),
+--     row = 0,
+--     col = api.nvim_get_option('columns') - width,
+--     style = 'minimal',
+--   })
+--
+--   api.nvim_command('setlocal nobuflisted')
+--   api.nvim_command('setlocal nowrap')
+--   api.nvim_command('setlocal winfixwidth')
+--   api.nvim_command('setlocal signcolumn=no')
+--   api.nvim_command('setlocal foldcolumn=0')
+--   api.nvim_command('setlocal nofoldenable')
+--   api.nvim_command('setlocal nospell')
+--   api.nvim_win_set_buf(0, output_buf)
+-- end
+--
+local function run_ai(command)
+  local lang = vim.bo.filetype
   local buf = api.nvim_get_current_buf()
-
   local input = clean_prompt(get_visual_selection(buf))
-  local output = pair_cmd("explain", lang, input)
+  local output = pair_cmd(command, lang, input)
 
-  -- write output right above the prompt
-  api.nvim_buf_set_lines(buf, s_start[2] - 1, s_start[2] - 1, false, output)
+  -- Open a new buffer for the output
+  local output_buf = api.nvim_create_buf(false, true)
+  api.nvim_buf_set_lines(output_buf, 0, -1, false, output)
 
+  -- Set the buffer options
+  api.nvim_buf_set_option(output_buf, 'buftype', 'nofile')
+  api.nvim_buf_set_option(output_buf, 'bufhidden', 'hide')
+
+  -- Open the buffer in a new horizontal split, taking 40% of the width
+  local width = math.floor(api.nvim_get_option('columns') * 0.4)
+  local win = api.nvim_open_win(output_buf, true, {
+    relative = 'win',
+    width = width,
+    height = api.nvim_get_option('lines'),
+    row = 0,
+    col = api.nvim_get_option('columns') - width,
+    style = 'minimal',
+  })
+
+  api.nvim_command('setlocal nobuflisted')
+  api.nvim_command('setlocal nowrap')
+  api.nvim_command('setlocal winfixwidth')
+  api.nvim_command('setlocal signcolumn=no')
+  api.nvim_command('setlocal foldcolumn=0')
+  api.nvim_command('setlocal nofoldenable')
+  api.nvim_command('setlocal nospell')
+  api.nvim_win_set_buf(0, output_buf)
 end
+
+local function explain()
+  run_ai("explain")
+end
+
+local function walkthrough()
+  run_ai("walkthrough")
+end
+
+
 
 return {
   setup = setup,
   write = write,
   refactor = refactor,
   explain = explain,
+  walkthrough = walkthrough,
 }
